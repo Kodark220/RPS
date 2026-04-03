@@ -17,10 +17,9 @@ const CHAINS = {
 };
 
 // Contract addresses per network
-// Update these after deploying the fixed contract on each network
 const CONTRACTS = {
-  studionet: '0x5A41a0DF2C8B0FbFEF512800DF12A90086c58C2e',
-  'testnet-bradbury': '0xbf379a40eaa9a13eb7d637cbfc8e105b1018662a',
+  studionet: '0x13FBf85D01ab0AeD4aBFD902FA458Fb6f4Dce101',
+  'testnet-bradbury': '0x9F80595e166d9B5a244084cEd255B42bcFbAA0A6',
 };
 
 // Network names used by client.connect()
@@ -97,7 +96,7 @@ async function safeConnect(network) {
 
 let readClient = null;
 let writeClient = null;
-let currentNetwork = 'studionet';
+let currentNetwork = 'testnet-bradbury';
 let walletAddress = null;
 
 // ============================================================
