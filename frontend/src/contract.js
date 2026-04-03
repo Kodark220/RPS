@@ -3,7 +3,7 @@
  *
  * Handles client creation, wallet connection, and all contract calls.
  */
-import { createClient, createAccount } from 'genlayer-js';
+import { createClient } from 'genlayer-js';
 import { studionet, testnetBradbury } from 'genlayer-js/chains';
 import { TransactionStatus } from 'genlayer-js/types';
 
@@ -28,6 +28,52 @@ const CONNECT_NAMES = {
   studionet: 'studionet',
   'testnet-bradbury': 'testnetBradbury',
 };
+
+// ============================================================
+// Chain switching helper (bypasses MetaMask Snaps requirement)
+// ============================================================
+
+async function switchWalletChain(network) {
+  const chain = CHAINS[network];
+  const chainIdHex = `0x${chain.id.toString(16)}`;
+
+  const currentChainId = await window.ethereum.request({ method: 'eth_chainId' });
+  if (currentChainId === chainIdHex) return;
+
+  try {
+    await window.ethereum.request({
+      method: 'wallet_switchEthereumChain',
+      params: [{ chainId: chainIdHex }],
+    });
+  } catch (switchError) {
+    // Chain not added yet — add it first
+    if (switchError.code === 4902 || switchError.code === -32603) {
+      await window.ethereum.request({
+        method: 'wallet_addEthereumChain',
+        params: [{
+          chainId: chainIdHex,
+          chainName: chain.name,
+          rpcUrls: chain.rpcUrls.default.http,
+          nativeCurrency: chain.nativeCurrency,
+          blockExplorerUrls: [chain.blockExplorers?.default?.url].filter(Boolean),
+        }],
+      });
+    } else {
+      throw switchError;
+    }
+  }
+}
+
+async function safeConnect(network) {
+  try {
+    // Try SDK connect (includes Snap installation)
+    await writeClient.connect(CONNECT_NAMES[network]);
+  } catch (err) {
+    // If wallet_getSnaps fails, fall back to manual chain switching
+    console.warn('SDK connect failed (Snap not supported), using manual chain switch:', err.message);
+    await switchWalletChain(network);
+  }
+}
 
 // ============================================================
 // State
@@ -95,7 +141,7 @@ export async function connectWallet(network) {
   });
 
   // Switch wallet to the correct network
-  await writeClient.connect(CONNECT_NAMES[currentNetwork]);
+  await safeConnect(currentNetwork);
 
   return walletAddress;
 }
@@ -120,7 +166,7 @@ export async function switchNetwork(network) {
       account: walletAddress,
       provider: window.ethereum,
     });
-    await writeClient.connect(CONNECT_NAMES[network]);
+    await safeConnect(network);
   }
 }
 
