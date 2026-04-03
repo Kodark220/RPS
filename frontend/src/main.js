@@ -120,7 +120,7 @@ function setupWallet() {
   $('#connect-btn').addEventListener('click', onConnect);
   $('#disconnect-btn').addEventListener('click', onDisconnect);
 
-  // Listen for MetaMask events
+  // Listen for wallet events
   contract.onAccountsChanged((addr) => {
     if (addr) {
       updateWalletUI(addr);

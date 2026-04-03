@@ -30,25 +30,41 @@ const CONNECT_NAMES = {
 };
 
 // ============================================================
-// Chain switching helper (bypasses MetaMask Snaps requirement)
+// Wallet provider detection
+// ============================================================
+
+let activeProvider = null;
+
+function getProvider() {
+  if (activeProvider) return activeProvider;
+  // Check for any EIP-1193 provider
+  if (typeof window !== 'undefined' && window.ethereum) return window.ethereum;
+  return null;
+}
+
+// ============================================================
+// Chain switching helper (works with any EIP-1193 wallet)
 // ============================================================
 
 async function switchWalletChain(network) {
+  const provider = getProvider();
+  if (!provider) return;
+
   const chain = CHAINS[network];
   const chainIdHex = `0x${chain.id.toString(16)}`;
 
-  const currentChainId = await window.ethereum.request({ method: 'eth_chainId' });
+  const currentChainId = await provider.request({ method: 'eth_chainId' });
   if (currentChainId === chainIdHex) return;
 
   try {
-    await window.ethereum.request({
+    await provider.request({
       method: 'wallet_switchEthereumChain',
       params: [{ chainId: chainIdHex }],
     });
   } catch (switchError) {
     // Chain not added yet — add it first
     if (switchError.code === 4902 || switchError.code === -32603) {
-      await window.ethereum.request({
+      await provider.request({
         method: 'wallet_addEthereumChain',
         params: [{
           chainId: chainIdHex,
@@ -69,8 +85,8 @@ async function safeConnect(network) {
     // Try SDK connect (includes Snap installation)
     await writeClient.connect(CONNECT_NAMES[network]);
   } catch (err) {
-    // If wallet_getSnaps fails, fall back to manual chain switching
-    console.warn('SDK connect failed (Snap not supported), using manual chain switch:', err.message);
+    // If wallet_getSnaps or Snap install fails, fall back to manual chain switching
+    console.warn('SDK connect failed, using manual chain switch:', err.message);
     await switchWalletChain(network);
   }
 }
@@ -116,19 +132,21 @@ export function initReadClient(network) {
 }
 
 export async function connectWallet(network) {
-  if (!window.ethereum) {
-    throw new Error('MetaMask not detected. Please install MetaMask to play.');
+  const provider = getProvider();
+  if (!provider) {
+    throw new Error('No wallet detected. Please install MetaMask, Coinbase Wallet, or any EVM-compatible wallet.');
   }
 
+  activeProvider = provider;
   currentNetwork = network || currentNetwork;
 
   // Request accounts
-  const accounts = await window.ethereum.request({
+  const accounts = await provider.request({
     method: 'eth_requestAccounts',
   });
 
   if (!accounts || accounts.length === 0) {
-    throw new Error('No accounts found. Please unlock MetaMask.');
+    throw new Error('No accounts found. Please unlock your wallet.');
   }
 
   walletAddress = accounts[0];
@@ -137,7 +155,7 @@ export async function connectWallet(network) {
   writeClient = createClient({
     chain: CHAINS[currentNetwork],
     account: walletAddress,
-    provider: window.ethereum,
+    provider: provider,
   });
 
   // Switch wallet to the correct network
@@ -149,6 +167,7 @@ export async function connectWallet(network) {
 export function disconnectWallet() {
   writeClient = null;
   walletAddress = null;
+  activeProvider = null;
 }
 
 export async function switchNetwork(network) {
@@ -160,11 +179,12 @@ export async function switchNetwork(network) {
   });
 
   // Recreate write client if wallet is connected
-  if (walletAddress && window.ethereum) {
+  const provider = getProvider();
+  if (walletAddress && provider) {
     writeClient = createClient({
       chain: CHAINS[network],
       account: walletAddress,
-      provider: window.ethereum,
+      provider: provider,
     });
     await safeConnect(network);
   }
@@ -283,12 +303,13 @@ export async function resolveRound(roomCode) {
 }
 
 // ============================================================
-// MetaMask event listeners
+// Wallet event listeners (works with any EIP-1193 provider)
 // ============================================================
 
 export function onAccountsChanged(callback) {
-  if (window.ethereum) {
-    window.ethereum.on('accountsChanged', (accounts) => {
+  const provider = getProvider();
+  if (provider && provider.on) {
+    provider.on('accountsChanged', (accounts) => {
       if (accounts.length === 0) {
         disconnectWallet();
         callback(null);
@@ -298,7 +319,7 @@ export function onAccountsChanged(callback) {
           writeClient = createClient({
             chain: CHAINS[currentNetwork],
             account: walletAddress,
-            provider: window.ethereum,
+            provider: provider,
           });
         }
         callback(walletAddress);
@@ -308,8 +329,9 @@ export function onAccountsChanged(callback) {
 }
 
 export function onChainChanged(callback) {
-  if (window.ethereum) {
-    window.ethereum.on('chainChanged', () => {
+  const provider = getProvider();
+  if (provider && provider.on) {
+    provider.on('chainChanged', () => {
       callback();
     });
   }
