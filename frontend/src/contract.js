@@ -30,16 +30,16 @@ const CONNECT_NAMES = {
 };
 
 // ============================================================
-// Wallet provider detection
+// Wallet provider detection (supports multiple wallets)
 // ============================================================
 
 let activeProvider = null;
 
 function getProvider() {
   if (activeProvider) return activeProvider;
-  // Check for any EIP-1193 provider
-  if (typeof window !== 'undefined' && window.ethereum) return window.ethereum;
-  return null;
+  if (typeof window === 'undefined') return null;
+  // Check common provider injection points
+  return window.ethereum || window.okxwallet || window.coinbaseWalletExtension || window.trustwallet || null;
 }
 
 // ============================================================
