@@ -205,35 +205,48 @@ async function onPlaySolo(move) {
 
   showLoading('Waiting for validator consensus...');
 
+  // Use cached stats as the "before" snapshot (avoids a blocking pre-play RPC read)
+  const statsBefore = cachedPlayerStats || { wins: 0, losses: 0, draws: 0, solo_wins: 0, solo_losses: 0 };
+
   try {
-    // Get stats before
-    const statsBefore = await contract.getPlayerStats(contract.getWalletAddress());
-
-    // Execute the play
+    // Execute the play — this is the only critical call
     await contract.playSolo(move);
-
-    // Get stats after
-    const statsAfter = await contract.getPlayerStats(contract.getWalletAddress());
-    cachedPlayerStats = statsAfter;
-
     hideLoading();
+
+    // Fetch updated stats (non-critical — if this fails, show generic success)
+    let statsAfter = null;
+    try {
+      statsAfter = await contract.getPlayerStats(contract.getWalletAddress());
+      cachedPlayerStats = statsAfter;
+      storage.saveCachedStats(contract.getWalletAddress(), statsAfter);
+    } catch (statsErr) {
+      console.warn('Could not fetch post-play stats:', statsErr);
+    }
 
     // Determine outcome by comparing stats
     let outcome, aiMove;
-    if (statsAfter.solo_wins > statsBefore.solo_wins) {
-      outcome = 'win';
-      aiMove = BEATS[move];
-    } else if (statsAfter.solo_losses > statsBefore.solo_losses) {
-      outcome = 'lose';
-      aiMove = LOSES_TO[move];
+    if (statsAfter) {
+      if (statsAfter.solo_wins > statsBefore.solo_wins) {
+        outcome = 'win';
+        aiMove = BEATS[move];
+      } else if (statsAfter.solo_losses > statsBefore.solo_losses) {
+        outcome = 'lose';
+        aiMove = LOSES_TO[move];
+      } else {
+        outcome = 'draw';
+        aiMove = move;
+      }
     } else {
-      outcome = 'draw';
-      aiMove = move;
+      outcome = 'unknown';
     }
 
     // Reveal AI move
     aiDisplay.className = 'arena__hand';
-    aiDisplay.textContent = MOVE_EMOJIS[aiMove];
+    if (outcome !== 'unknown') {
+      aiDisplay.textContent = MOVE_EMOJIS[aiMove];
+    } else {
+      aiDisplay.textContent = '❓';
+    }
 
     // Highlight winner
     if (outcome === 'win') {
@@ -242,36 +255,45 @@ async function onPlaySolo(move) {
     } else if (outcome === 'lose') {
       $('#player-move-display').classList.add('arena__hand--lose');
       aiDisplay.classList.add('arena__hand--win');
-    } else {
+    } else if (outcome === 'draw') {
       $('#player-move-display').classList.add('arena__hand--draw');
       aiDisplay.classList.add('arena__hand--draw');
     }
 
     // Show result banner
     show(result);
-    result.className = `result-banner ${outcome}`;
     if (outcome === 'win') {
+      result.className = 'result-banner win';
       result.textContent = `🎉 You WIN! ${MOVE_NAMES[move]} beats ${MOVE_NAMES[aiMove]}`;
     } else if (outcome === 'lose') {
+      result.className = 'result-banner lose';
       result.textContent = `😞 You LOSE! ${MOVE_NAMES[aiMove]} beats ${MOVE_NAMES[move]}`;
-    } else {
+    } else if (outcome === 'draw') {
+      result.className = 'result-banner draw';
       result.textContent = `🤝 DRAW! Both chose ${MOVE_NAMES[move]}`;
+    } else {
+      result.className = 'result-banner';
+      result.textContent = '✅ Move submitted! Refresh to see result.';
     }
 
     // Update quick stats
-    updateQuickStats(statsAfter);
+    if (statsAfter) {
+      updateQuickStats(statsAfter);
+    }
 
     // Save to local history
-    storage.addGameRecord({
-      type: 'solo',
-      playerMove: move,
-      aiMove,
-      outcome,
-      network: contract.getCurrentNetwork(),
-    });
-    storage.saveCachedStats(contract.getWalletAddress(), statsAfter);
+    if (outcome !== 'unknown') {
+      storage.addGameRecord({
+        type: 'solo',
+        playerMove: move,
+        aiMove,
+        outcome,
+        network: contract.getCurrentNetwork(),
+      });
+    }
   } catch (err) {
     hideLoading();
+    console.error('playSolo transaction failed:', err);
     showToast(`Play failed: ${err.message}`, 'error');
     hide(arena);
   } finally {
