@@ -41,6 +41,31 @@ function getProvider() {
   return window.ethereum || window.okxwallet || window.coinbaseWalletExtension || window.trustwallet || null;
 }
 
+/**
+ * Wraps a wallet provider to strip fields that cause issues on ZKSync-based
+ * chains (Bradbury). Wallets handle type, nonce, gasPrice, and chainId
+ * better when they manage these themselves.
+ */
+function wrapProvider(rawProvider) {
+  return {
+    ...rawProvider,
+    request: async ({ method, params }) => {
+      if (method === 'eth_sendTransaction' && params && params[0]) {
+        const tx = { ...params[0] };
+        // Let the wallet determine these — avoids ZKSync/legacy conflicts
+        delete tx.type;
+        delete tx.nonce;
+        delete tx.chainId;
+        delete tx.gasPrice;
+        return rawProvider.request({ method, params: [tx] });
+      }
+      return rawProvider.request({ method, params });
+    },
+    on: rawProvider.on?.bind(rawProvider),
+    removeListener: rawProvider.removeListener?.bind(rawProvider),
+  };
+}
+
 // ============================================================
 // Chain switching helper (works with any EIP-1193 wallet)
 // ============================================================
@@ -150,11 +175,12 @@ export async function connectWallet(network) {
 
   walletAddress = accounts[0];
 
-  // Create write client with wallet provider
+  // Create write client with wrapped provider for ZKSync compatibility
+  const wrapped = wrapProvider(provider);
   writeClient = createClient({
     chain: CHAINS[currentNetwork],
     account: walletAddress,
-    provider: provider,
+    provider: wrapped,
   });
 
   // Switch wallet to the correct network
@@ -180,10 +206,11 @@ export async function switchNetwork(network) {
   // Recreate write client if wallet is connected
   const provider = getProvider();
   if (walletAddress && provider) {
+    const wrapped = wrapProvider(provider);
     writeClient = createClient({
       chain: CHAINS[network],
       account: walletAddress,
-      provider: provider,
+      provider: wrapped,
     });
     await safeConnect(network);
   }
