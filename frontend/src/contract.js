@@ -148,10 +148,32 @@ export function isWalletConnected() {
 // Client management
 // ============================================================
 
+/**
+ * HTTP-only provider that always goes through the chain RPC URL.
+ * Prevents the SDK from routing gen_call through window.ethereum,
+ * which wallets don't understand.
+ */
+function makeHttpProvider(chain) {
+  const rpcUrl = chain.rpcUrls.default.http[0];
+  return {
+    request: async ({ method, params }) => {
+      const res = await fetch(rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: Date.now(), method, params }),
+      });
+      const json = await res.json();
+      if (json.error) throw json.error;
+      return json.result;
+    },
+  };
+}
+
 export function initReadClient(network) {
   currentNetwork = network;
   readClient = createClient({
     chain: CHAINS[network],
+    provider: makeHttpProvider(CHAINS[network]),
   });
 }
 
@@ -198,9 +220,10 @@ export function disconnectWallet() {
 export async function switchNetwork(network) {
   currentNetwork = network;
 
-  // Recreate read client
+  // Recreate read client with HTTP-only provider
   readClient = createClient({
     chain: CHAINS[network],
+    provider: makeHttpProvider(CHAINS[network]),
   });
 
   // Recreate write client if wallet is connected

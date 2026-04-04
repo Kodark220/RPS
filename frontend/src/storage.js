@@ -31,7 +31,7 @@ function setStore(data) {
 // ---- Network ----
 
 export function getSavedNetwork() {
-  return getStore().network || 'studionet';
+  return getStore().network || 'testnet-bradbury';
 }
 
 export function saveNetwork(network) {
