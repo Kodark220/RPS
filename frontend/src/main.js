@@ -11,10 +11,48 @@ import './style.css';
 
 const MOVE_EMOJIS = ['🪨', '📄', '✂️'];
 const MOVE_NAMES = ['Rock', 'Paper', 'Scissors'];
+const MOVE_NAME_TO_INDEX = { rock: 0, paper: 1, scissors: 2 };
 
 // What each move beats: rock(0)->scissors(2), paper(1)->rock(0), scissors(2)->paper(1)
 const BEATS = { 0: 2, 1: 0, 2: 1 };
 const LOSES_TO = { 0: 1, 1: 2, 2: 0 };
+
+/**
+ * Parse the result string returned by the contract's play_solo method.
+ * Expected formats:
+ *   "You win! You: rock vs AI: scissors"
+ *   "You lose! You: rock vs AI: paper"
+ *   "Draw! Both chose rock"
+ */
+function parseResultString(str, playerMove) {
+  if (!str) return {};
+  const lower = str.toLowerCase();
+  if (lower.startsWith('you win')) {
+    const aiName = lower.match(/ai:\s*(\w+)/)?.[1];
+    return { outcome: 'win', aiMove: aiName ? MOVE_NAME_TO_INDEX[aiName] : BEATS[playerMove] };
+  }
+  if (lower.startsWith('you lose')) {
+    const aiName = lower.match(/ai:\s*(\w+)/)?.[1];
+    return { outcome: 'lose', aiMove: aiName ? MOVE_NAME_TO_INDEX[aiName] : LOSES_TO[playerMove] };
+  }
+  if (lower.startsWith('draw')) {
+    return { outcome: 'draw', aiMove: playerMove };
+  }
+  return {};
+}
+
+/** Retry getPlayerStats with delay between attempts. */
+async function retryGetStats(address, maxAttempts, delayMs) {
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      return await contract.getPlayerStats(address);
+    } catch (err) {
+      console.warn(`getPlayerStats attempt ${i + 1}/${maxAttempts} failed:`, err.message);
+      if (i < maxAttempts - 1) await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  return null;
+}
 
 // ============================================================
 // DOM Helpers
@@ -209,44 +247,60 @@ async function onPlaySolo(move) {
   const statsBefore = cachedPlayerStats || { wins: 0, losses: 0, draws: 0, solo_wins: 0, solo_losses: 0 };
 
   try {
-    // Execute the play — this is the only critical call
-    await contract.playSolo(move);
-    hideLoading();
+    // Execute the play — waits for ACCEPTED consensus status
+    const receipt = await contract.playSolo(move);
 
-    // Fetch updated stats (non-critical — if this fails, show generic success)
-    let statsAfter = null;
+    // Try to extract result string from the receipt (available on studionet)
+    let resultStr = null;
     try {
-      statsAfter = await contract.getPlayerStats(contract.getWalletAddress());
-      cachedPlayerStats = statsAfter;
-      storage.saveCachedStats(contract.getWalletAddress(), statsAfter);
-    } catch (statsErr) {
-      console.warn('Could not fetch post-play stats:', statsErr);
+      const leaderReceipt = receipt?.consensus_data?.leader_receipt;
+      if (Array.isArray(leaderReceipt) && leaderReceipt.length > 0) {
+        const payload = leaderReceipt[0]?.result?.payload;
+        if (typeof payload === 'string') resultStr = payload;
+      }
+    } catch (_) { /* ignore — not all networks include this */ }
+    console.log('Receipt result string:', resultStr);
+
+    // Determine outcome from receipt string if available
+    let outcome, aiMove;
+    if (resultStr) {
+      ({ outcome, aiMove } = parseResultString(resultStr, move));
     }
 
-    // Determine outcome by comparing stats
-    let outcome, aiMove;
-    if (statsAfter) {
-      if (statsAfter.solo_wins > statsBefore.solo_wins) {
-        outcome = 'win';
-        aiMove = BEATS[move];
-      } else if (statsAfter.solo_losses > statsBefore.solo_losses) {
-        outcome = 'lose';
-        aiMove = LOSES_TO[move];
-      } else {
-        outcome = 'draw';
-        aiMove = move;
+    // If we couldn't parse from receipt, fetch stats with retries
+    if (!outcome) {
+      showLoading('Fetching result...');
+      const statsAfter = await retryGetStats(contract.getWalletAddress(), 4, 2000);
+      if (statsAfter) {
+        cachedPlayerStats = statsAfter;
+        storage.saveCachedStats(contract.getWalletAddress(), statsAfter);
+        if (statsAfter.solo_wins > statsBefore.solo_wins) {
+          outcome = 'win';
+          aiMove = BEATS[move];
+        } else if (statsAfter.solo_losses > statsBefore.solo_losses) {
+          outcome = 'lose';
+          aiMove = LOSES_TO[move];
+        } else {
+          outcome = 'draw';
+          aiMove = move;
+        }
       }
     } else {
-      outcome = 'unknown';
+      // Still fetch stats in background to update the UI
+      retryGetStats(contract.getWalletAddress(), 3, 2000).then((s) => {
+        if (s) {
+          cachedPlayerStats = s;
+          storage.saveCachedStats(contract.getWalletAddress(), s);
+          updateQuickStats(s);
+        }
+      });
     }
+
+    hideLoading();
 
     // Reveal AI move
     aiDisplay.className = 'arena__hand';
-    if (outcome !== 'unknown') {
-      aiDisplay.textContent = MOVE_EMOJIS[aiMove];
-    } else {
-      aiDisplay.textContent = '❓';
-    }
+    aiDisplay.textContent = outcome ? MOVE_EMOJIS[aiMove] : '❓';
 
     // Highlight winner
     if (outcome === 'win') {
@@ -273,16 +327,16 @@ async function onPlaySolo(move) {
       result.textContent = `🤝 DRAW! Both chose ${MOVE_NAMES[move]}`;
     } else {
       result.className = 'result-banner';
-      result.textContent = '✅ Move submitted! Refresh to see result.';
+      result.textContent = '✅ Transaction confirmed but could not fetch result. Please check your stats.';
     }
 
     // Update quick stats
-    if (statsAfter) {
-      updateQuickStats(statsAfter);
+    if (cachedPlayerStats) {
+      updateQuickStats(cachedPlayerStats);
     }
 
     // Save to local history
-    if (outcome !== 'unknown') {
+    if (outcome) {
       storage.addGameRecord({
         type: 'solo',
         playerMove: move,
