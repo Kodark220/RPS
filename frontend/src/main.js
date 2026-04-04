@@ -729,10 +729,11 @@ async function init() {
     }
   }
 
-  // If MetaMask is already connected, auto-reconnect
-  if (window.ethereum) {
+  // Auto-reconnect if any wallet is already connected
+  const provider = contract.getProvider();
+  if (provider) {
     try {
-      const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+      const accounts = await provider.request({ method: 'eth_accounts' });
       if (accounts && accounts.length > 0) {
         await contract.connectWallet(savedNetwork);
         storage.saveWallet(accounts[0]);

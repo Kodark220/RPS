@@ -34,11 +34,31 @@ const CONNECT_NAMES = {
 
 let activeProvider = null;
 
-function getProvider() {
+/**
+ * Detect any available EIP-1193 wallet provider.
+ * Supports MetaMask, OKX, Coinbase, Trust, Phantom, Rabby,
+ * and any wallet injecting window.ethereum (including EIP-6963 multi-wallet).
+ */
+export function getProvider() {
   if (activeProvider) return activeProvider;
   if (typeof window === 'undefined') return null;
-  // Check common provider injection points
-  return window.ethereum || window.okxwallet || window.coinbaseWalletExtension || window.trustwallet || null;
+
+  // EIP-6963: some wallets expose multiple providers in an array
+  if (window.ethereum?.providers?.length) {
+    // Prefer non-MetaMask-like providers first (they tend to be the one the user installed)
+    // but fall back to whatever is available
+    return window.ethereum.providers[0];
+  }
+
+  return (
+    window.ethereum ||
+    window.okxwallet ||
+    window.coinbaseWalletExtension ||
+    window.phantom?.ethereum ||
+    window.trustwallet ||
+    window.rabby ||
+    null
+  );
 }
 
 /**
@@ -365,10 +385,11 @@ export function onAccountsChanged(callback) {
       } else {
         walletAddress = accounts[0];
         if (writeClient) {
+          const wrapped = wrapProvider(provider);
           writeClient = createClient({
             chain: CHAINS[currentNetwork],
             account: walletAddress,
-            provider: provider,
+            provider: wrapped,
           });
         }
         callback(walletAddress);
