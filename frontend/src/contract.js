@@ -303,48 +303,25 @@ export async function getRoomScores(roomCode) {
 // Write methods (transactions)
 // ============================================================
 
-const MAX_RETRIES = 2;
-const RETRY_DELAY_MS = 1500;
-
-async function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 async function executeWrite(functionName, args) {
   if (!writeClient) {
     throw new Error('Wallet not connected. Please connect your wallet first.');
   }
 
-  let lastError;
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      const txHash = await writeClient.writeContract({
-        address: CONTRACTS[currentNetwork],
-        functionName,
-        args,
-        value: BigInt(0),
-      });
+  const txHash = await writeClient.writeContract({
+    address: CONTRACTS[currentNetwork],
+    functionName,
+    args,
+    value: BigInt(0),
+  });
 
-      // Wait for the transaction to be accepted by consensus
-      const receipt = await readClient.waitForTransactionReceipt({
-        hash: txHash,
-        status: TransactionStatus.ACCEPTED,
-      });
+  // Wait for the transaction to be accepted by consensus
+  const receipt = await readClient.waitForTransactionReceipt({
+    hash: txHash,
+    status: TransactionStatus.ACCEPTED,
+  });
 
-      return receipt;
-    } catch (err) {
-      lastError = err;
-      // Only retry on network/timeout errors, not user rejections
-      const msg = (err.message || '').toLowerCase();
-      if (msg.includes('user rejected') || msg.includes('user denied') || msg.includes('invalid move')) {
-        throw err;
-      }
-      if (attempt < MAX_RETRIES) {
-        await sleep(RETRY_DELAY_MS * (attempt + 1));
-      }
-    }
-  }
-  throw lastError;
+  return receipt;
 }
 
 export async function playSolo(move) {
