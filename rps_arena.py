@@ -416,7 +416,10 @@ class RPSArena(gl.Contract):
     # ========================================================
 
     @gl.public.view
-    def get_player_stats(self, player_address: Address) -> str:
+    def get_player_stats(self, player_address) -> str:
+        # SDK may pass address as a hex string — convert to Address for TreeMap lookup
+        if isinstance(player_address, str):
+            player_address = Address(bytes.fromhex(player_address.replace('0x', '')))
         default = PlayerStats(u32(0), u32(0), u32(0), u32(0), u32(0))
         ps = self.stats.get(player_address, default)
         return json.dumps({
