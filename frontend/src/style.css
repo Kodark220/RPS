@@ -339,6 +339,24 @@ body {
   color: var(--error);
 }
 
+.wallet-connected__username {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-0);
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.wallet-connected__username:empty { display: none; }
+
+.wallet-connected__username:not(:empty) + #wallet-address {
+  font-size: 0.7rem;
+  color: var(--text-2);
+}
+
 /* ================================================================
    Nav Tabs
    ================================================================ */
@@ -1551,4 +1569,108 @@ body {
   .arena { flex-direction: column; gap: var(--sp-6); }
   .arena__vs-line { width: 40px; height: 2px; }
   .room-move-buttons { flex-direction: column; }
+}
+
+/* ================================================================
+   Username Modal
+   ================================================================ */
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal.hidden { display: none; }
+
+.modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(6px);
+}
+
+.modal__content {
+  position: relative;
+  background: var(--bg-1);
+  border: 1px solid var(--border-accent);
+  border-radius: var(--r-lg);
+  padding: var(--sp-6);
+  max-width: 380px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 0 40px rgba(0, 212, 255, 0.1);
+}
+
+.modal__content h3 {
+  font-size: 1.2rem;
+  color: var(--text-0);
+  margin-bottom: var(--sp-1);
+}
+
+.modal__content p {
+  font-size: 0.85rem;
+  color: var(--text-2);
+  margin-bottom: var(--sp-4);
+}
+
+.modal__input {
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  color: var(--text-0);
+  font-size: 0.95rem;
+  outline: none;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.modal__input:focus {
+  border-color: var(--accent);
+}
+
+.modal__input::placeholder {
+  color: var(--text-2);
+}
+
+.modal__actions {
+  display: flex;
+  gap: var(--sp-2);
+  margin-top: var(--sp-4);
+  justify-content: center;
+}
+
+.btn {
+  padding: 8px 20px;
+  border-radius: var(--r-md);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s var(--ease);
+}
+
+.btn--primary {
+  background: var(--accent-gradient);
+  color: var(--bg-0);
+}
+
+.btn--primary:hover {
+  box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+}
+
+.btn--ghost {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-2);
+}
+
+.btn--ghost:hover {
+  border-color: var(--text-2);
+  color: var(--text-1);
 }

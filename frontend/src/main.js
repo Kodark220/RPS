@@ -183,6 +183,11 @@ async function onConnect() {
     updateWalletUI(addr);
     showToast('Wallet connected!', 'success');
     loadAllStats();
+
+    // Prompt for username if not set
+    if (!storage.getUsername()) {
+      showUsernameModal();
+    }
   } catch (err) {
     showToast(err.message, 'error');
   } finally {
@@ -203,7 +208,40 @@ function onDisconnect() {
 function updateWalletUI(addr) {
   hide($('#connect-btn'));
   show($('#wallet-info'));
+  const username = storage.getUsername();
+  $('#wallet-username').textContent = username || '';
   $('#wallet-address').textContent = shortAddr(addr);
+}
+
+// ============================================================
+// Username Modal
+// ============================================================
+
+function setupUsernameModal() {
+  $('#username-save-btn').addEventListener('click', saveUsername);
+  $('#username-skip-btn').addEventListener('click', () => hide($('#username-modal')));
+  $('#username-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') saveUsername();
+  });
+  // Click username in topbar to change it
+  $('#wallet-username').addEventListener('click', showUsernameModal);
+}
+
+function showUsernameModal() {
+  const input = $('#username-input');
+  input.value = storage.getUsername();
+  show($('#username-modal'));
+  setTimeout(() => input.focus(), 100);
+}
+
+function saveUsername() {
+  const name = $('#username-input').value.trim();
+  if (name) {
+    storage.saveUsername(name);
+    $('#wallet-username').textContent = name;
+    showToast(`Username set to "${name}"`, 'success');
+  }
+  hide($('#username-modal'));
 }
 
 // ============================================================
@@ -770,6 +808,7 @@ async function init() {
   setupTabs();
   setupNetworkSelect();
   setupWallet();
+  setupUsernameModal();
   setupSoloPlay();
   setupRooms();
 

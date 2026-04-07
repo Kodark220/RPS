@@ -64,11 +64,26 @@
         <div id="wallet-info" class="wallet-connected hidden">
           <div class="wallet-connected__addr">
             <span class="wallet-connected__dot"></span>
+            <span id="wallet-username" class="wallet-connected__username"></span>
             <span id="wallet-address"></span>
           </div>
           <button id="disconnect-btn" class="wallet-connected__close" title="Disconnect">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
           </button>
+        </div>
+
+        <!-- Username modal (shows after wallet connect if no username set) -->
+        <div id="username-modal" class="modal hidden">
+          <div class="modal__backdrop"></div>
+          <div class="modal__content">
+            <h3>Set Your Username</h3>
+            <p>Choose a name to identify yourself in the arena</p>
+            <input id="username-input" type="text" class="modal__input" placeholder="Enter username (max 20 chars)" maxlength="20" autocomplete="off" />
+            <div class="modal__actions">
+              <button id="username-save-btn" class="btn btn--primary">Save</button>
+              <button id="username-skip-btn" class="btn btn--ghost">Skip</button>
+            </div>
+          </div>
         </div>
       </div>
     </header>

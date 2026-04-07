@@ -105,6 +105,18 @@ export function saveCachedStats(address, stats) {
   setStore(store);
 }
 
+// ---- Username ----
+
+export function getUsername() {
+  return getStore().username || '';
+}
+
+export function saveUsername(name) {
+  const store = getStore();
+  store.username = (name || '').trim().slice(0, 20);
+  setStore(store);
+}
+
 // ---- Full clear ----
 
 export function clearAll() {
