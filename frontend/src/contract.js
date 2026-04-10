@@ -18,7 +18,7 @@ const CHAINS = {
 
 // Contract addresses per network (must be EIP-55 checksummed)
 const CONTRACTS = {
-  studionet: '0x85D7bf947A512Fc640C75327A780c90847267697',
+  studionet: '0x6E64D709f8548834F6fECc29025D6C46E46fE9a4',
   'testnet-bradbury': '0x6CC53792Aa65A07f56E438b97886e08901099f04',
 };
 
