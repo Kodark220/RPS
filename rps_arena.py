@@ -465,7 +465,8 @@ class RPSArena(gl.Contract):
             scores.append({
                 "address": rp.address.as_hex,
                 "score": int(rp.score),
-                "eliminated": bool(rp.eliminated)
+                "eliminated": bool(rp.eliminated),
+                "has_moved": rp.move != u32(99)
             })
             i = i + u32(1)
         return json.dumps(scores)

@@ -353,16 +353,17 @@ async function onPlaySolo(move) {
     }
 
     // Show result banner
+    const displayName = storage.getUsername() || 'You';
     show(result);
     if (outcome === 'win') {
       result.className = 'result-banner win';
-      result.textContent = `🎉 You WIN! ${MOVE_NAMES[move]} beats ${MOVE_NAMES[aiMove]}`;
+      result.textContent = `🎉 ${displayName} WINS! ${MOVE_NAMES[move]} beats ${MOVE_NAMES[aiMove]}`;
     } else if (outcome === 'lose') {
       result.className = 'result-banner lose';
-      result.textContent = `😞 You LOSE! ${MOVE_NAMES[aiMove]} beats ${MOVE_NAMES[move]}`;
+      result.textContent = `😞 ${displayName} LOSES! ${MOVE_NAMES[aiMove]} beats ${MOVE_NAMES[move]}`;
     } else if (outcome === 'draw') {
       result.className = 'result-banner draw';
-      result.textContent = `🤝 DRAW! Both chose ${MOVE_NAMES[move]}`;
+      result.textContent = `🤝 DRAW! ${displayName} and AI both chose ${MOVE_NAMES[move]}`;
     } else {
       result.className = 'result-banner';
       result.textContent = '✅ Transaction confirmed but could not fetch result. Please check your stats.';
@@ -541,9 +542,12 @@ function renderRoomView(info, scores) {
       p.address.toLowerCase() === contract.getWalletAddress().toLowerCase();
 
     row.className = `leaderboard__row${p.eliminated ? ' leaderboard__row--eliminated' : ''}`;
+    const playerLabel = isMe && storage.getUsername()
+      ? `${storage.getUsername()} (${shortAddr(p.address)})`
+      : shortAddr(p.address);
     row.innerHTML = `
       <div class="leaderboard__addr">
-        ${shortAddr(p.address)}
+        ${playerLabel}
         ${isHost ? '<span class="leaderboard__tag leaderboard__tag--host">HOST</span>' : ''}
         ${isMe ? '<span class="leaderboard__tag leaderboard__tag--you">YOU</span>' : ''}
       </div>
@@ -555,6 +559,81 @@ function renderRoomView(info, scores) {
 
   // Action area
   renderRoomActions(info, scores);
+
+  // Live game log (visible during playing/finished)
+  const gameLog = $('#room-game-log');
+  const logEntries = $('#game-log-entries');
+  if (info.state === 'playing') {
+    show(gameLog);
+    logEntries.innerHTML = '';
+
+    // Round label
+    const roundLabel = document.createElement('div');
+    roundLabel.className = 'game-log__round-label';
+    roundLabel.textContent = `⚔️ Round ${info.current_round} of ${info.total_rounds}`;
+    logEntries.appendChild(roundLabel);
+
+    // Player move statuses
+    const activePlayers = scores.filter((p) => !p.eliminated);
+    const movedCount = activePlayers.filter((p) => p.has_moved).length;
+    activePlayers.forEach((p) => {
+      const entry = document.createElement('div');
+      const isMe = contract.getWalletAddress() &&
+        p.address.toLowerCase() === contract.getWalletAddress().toLowerCase();
+      const playerName = isMe
+        ? (storage.getUsername() || shortAddr(p.address))
+        : shortAddr(p.address);
+      const icon = p.has_moved ? '✅' : '⏳';
+      const statusText = p.has_moved ? 'Ready' : 'Choosing...';
+      entry.className = `game-log__entry ${p.has_moved ? 'game-log__entry--ready' : 'game-log__entry--waiting'}`;
+      entry.textContent = `${icon} ${playerName} — ${statusText}`;
+      logEntries.appendChild(entry);
+    });
+
+    // Summary
+    const summary = document.createElement('div');
+    summary.className = 'game-log__entry';
+    summary.style.fontWeight = '600';
+    summary.style.paddingTop = '4px';
+    if (movedCount === activePlayers.length) {
+      summary.textContent = '🎯 All players ready! Host can resolve the round.';
+      summary.style.color = 'var(--success)';
+    } else {
+      summary.textContent = `📊 ${movedCount}/${activePlayers.length} players have submitted`;
+    }
+    logEntries.appendChild(summary);
+  } else if (info.state === 'finished') {
+    show(gameLog);
+    logEntries.innerHTML = '';
+    const finish = document.createElement('div');
+    finish.className = 'game-log__round-label';
+    // Find winner name
+    const winnerPlayer = scores.find((p) => p.address.toLowerCase() === info.winner.toLowerCase());
+    const isWinnerMe = contract.getWalletAddress() &&
+      info.winner.toLowerCase() === contract.getWalletAddress().toLowerCase();
+    const winnerLabel = isWinnerMe
+      ? (storage.getUsername() || shortAddr(info.winner))
+      : shortAddr(info.winner);
+    finish.textContent = `🏆 Game Over — ${winnerLabel} wins with ${winnerPlayer ? winnerPlayer.score : '?'} points!`;
+    logEntries.appendChild(finish);
+
+    // Final standings
+    const sorted = [...scores].sort((a, b) => b.score - a.score);
+    sorted.forEach((p, idx) => {
+      const entry = document.createElement('div');
+      const isMe = contract.getWalletAddress() &&
+        p.address.toLowerCase() === contract.getWalletAddress().toLowerCase();
+      const name = isMe
+        ? (storage.getUsername() || shortAddr(p.address))
+        : shortAddr(p.address);
+      const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`;
+      entry.className = 'game-log__entry';
+      entry.textContent = `${medal} ${name} — ${p.score} pts`;
+      logEntries.appendChild(entry);
+    });
+  } else {
+    hide(gameLog);
+  }
 
   // Start polling if game is in progress
   if (info.state === 'playing') {
@@ -631,7 +710,12 @@ function renderRoomActions(info, scores) {
   } else if (info.state === 'finished') {
     const banner = document.createElement('div');
     banner.className = 'winner-banner';
-    banner.textContent = `🏆 Winner: ${shortAddr(info.winner)}`;
+    const isWinnerMe = contract.getWalletAddress() &&
+      info.winner.toLowerCase() === contract.getWalletAddress().toLowerCase();
+    const winnerName = isWinnerMe
+      ? (storage.getUsername() || shortAddr(info.winner))
+      : shortAddr(info.winner);
+    banner.textContent = `🏆 Winner: ${winnerName}${isWinnerMe ? ' (You!)' : ''}`;
     area.appendChild(banner);
   }
 

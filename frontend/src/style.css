@@ -1171,6 +1171,64 @@ body {
   text-decoration: line-through;
 }
 
+/* Live Game Log */
+.game-log {
+  margin-top: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-2);
+  overflow: hidden;
+}
+
+.game-log__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(0, 212, 255, 0.06);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.game-log__entries {
+  padding: 8px 14px;
+  max-height: 180px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.game-log__entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: var(--text-1);
+  padding: 4px 0;
+}
+
+.game-log__entry--ready {
+  color: var(--success);
+}
+
+.game-log__entry--waiting {
+  color: var(--text-2);
+}
+
+.game-log__round-label {
+  font-weight: 600;
+  color: var(--accent);
+  font-size: 0.78rem;
+  padding: 6px 0 2px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 2px;
+}
+
 /* Room Action Area */
 .room-action-area {
   display: flex;
