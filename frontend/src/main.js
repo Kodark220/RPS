@@ -434,7 +434,11 @@ async function onCreateRoom() {
     showToast(`Room "${code}" created!`, 'success');
     activeRoom = code;
     storage.saveRoom(code);
-    await refreshRoomView();
+    try {
+      await refreshRoomView();
+    } catch (err) {
+      showToast(`Error loading room: ${err.message}`, 'error');
+    }
     show($('#room-panel'));
   } catch (err) {
     hideLoading();
@@ -461,7 +465,11 @@ async function onJoinRoom() {
     showToast(`Joined room "${code}"!`, 'success');
     activeRoom = code;
     storage.saveRoom(code);
-    await refreshRoomView();
+    try {
+      await refreshRoomView();
+    } catch (err) {
+      showToast(`Error loading room: ${err.message}`, 'error');
+    }
     show($('#room-panel'));
   } catch (err) {
     hideLoading();
@@ -484,6 +492,7 @@ async function onViewRoom() {
   } catch (err) {
     showToast(`Room not found: ${err.message}`, 'error');
     activeRoom = null;
+    storage.saveRoom(null);
   }
 }
 
@@ -497,16 +506,12 @@ function closeRoomView() {
 async function refreshRoomView() {
   if (!activeRoom) return;
 
-  try {
-    const [info, scores] = await Promise.all([
-      contract.getRoomInfo(activeRoom),
-      contract.getRoomScores(activeRoom),
-    ]);
+  const [info, scores] = await Promise.all([
+    contract.getRoomInfo(activeRoom),
+    contract.getRoomScores(activeRoom),
+  ]);
 
-    renderRoomView(info, scores);
-  } catch (err) {
-    showToast(`Error loading room: ${err.message}`, 'error');
-  }
+  renderRoomView(info, scores);
 }
 
 function renderRoomView(info, scores) {
@@ -734,7 +739,7 @@ async function onStartRoom() {
     await contract.startRoom(activeRoom);
     hideLoading();
     showToast('Game started!', 'success');
-    await refreshRoomView();
+    try { await refreshRoomView(); } catch (e) { showToast(`Error loading room: ${e.message}`, 'error'); }
   } catch (err) {
     hideLoading();
     showToast(`Start failed: ${err.message}`, 'error');
@@ -747,7 +752,7 @@ async function onSubmitRoomMove(move) {
     await contract.submitMove(activeRoom, move);
     hideLoading();
     showToast(`Move submitted: ${MOVE_NAMES[move]}`, 'success');
-    await refreshRoomView();
+    try { await refreshRoomView(); } catch (e) { showToast(`Error loading room: ${e.message}`, 'error'); }
   } catch (err) {
     hideLoading();
     showToast(`Submit move failed: ${err.message}`, 'error');
@@ -760,7 +765,7 @@ async function onResolveRound() {
     await contract.resolveRound(activeRoom);
     hideLoading();
     showToast('Round resolved!', 'success');
-    await refreshRoomView();
+    try { await refreshRoomView(); } catch (e) { showToast(`Error loading room: ${e.message}`, 'error'); }
   } catch (err) {
     hideLoading();
     showToast(`Resolve failed: ${err.message}`, 'error');
@@ -769,7 +774,18 @@ async function onResolveRound() {
 
 function startRoomPoll() {
   stopRoomPoll();
-  roomPollTimer = setInterval(refreshRoomView, 10000);
+  roomPollTimer = setInterval(async () => {
+    try {
+      await refreshRoomView();
+    } catch (err) {
+      console.warn('Room poll error:', err.message);
+      stopRoomPoll();
+      activeRoom = null;
+      storage.saveRoom(null);
+      hide($('#room-panel'));
+      showToast('Room no longer available', 'warning');
+    }
+  }, 20000);
 }
 
 function stopRoomPoll() {
@@ -784,9 +800,9 @@ function stopRoomPoll() {
 // ============================================================
 
 async function loadAllStats() {
-  loadGameStats();
+  await loadGameStats();
   if (contract.isWalletConnected()) {
-    loadPlayerStats();
+    await loadPlayerStats();
   }
   updateContractInfo();
 }
@@ -896,9 +912,9 @@ async function init() {
   setupSoloPlay();
   setupRooms();
 
-  // Load initial data
+  // Load initial data (serialize to avoid rate limiting)
   updateContractInfo();
-  loadGameStats();
+  await loadGameStats();
 
   // Show cached stats instantly while chain loads
   const savedWallet = storage.getSavedWallet();
@@ -910,7 +926,23 @@ async function init() {
     }
   }
 
-  // Restore active room if any
+  // Auto-reconnect if any wallet is already connected
+  const provider = contract.getProvider();
+  if (provider) {
+    try {
+      const accounts = await provider.request({ method: 'eth_accounts' });
+      if (accounts && accounts.length > 0) {
+        await contract.connectWallet(savedNetwork);
+        storage.saveWallet(accounts[0]);
+        updateWalletUI(accounts[0]);
+        await loadPlayerStats();
+      }
+    } catch {
+      // Not connected yet — that's fine
+    }
+  }
+
+  // Restore active room if any (after other calls to avoid rate limit)
   const savedRoom = storage.getSavedRoom();
   if (savedRoom) {
     activeRoom = savedRoom;
@@ -925,22 +957,6 @@ async function init() {
     } catch {
       activeRoom = null;
       storage.saveRoom(null);
-    }
-  }
-
-  // Auto-reconnect if any wallet is already connected
-  const provider = contract.getProvider();
-  if (provider) {
-    try {
-      const accounts = await provider.request({ method: 'eth_accounts' });
-      if (accounts && accounts.length > 0) {
-        await contract.connectWallet(savedNetwork);
-        storage.saveWallet(accounts[0]);
-        updateWalletUI(accounts[0]);
-        loadPlayerStats();
-      }
-    } catch {
-      // Not connected yet — that's fine
     }
   }
 }
